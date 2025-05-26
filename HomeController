@@ -1,0 +1,201 @@
+using Microsoft.AspNetCore.Mvc;
+using RoleUserMVC.Models;
+using System.Diagnostics;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+
+namespace RoleUserMVC.Controllers
+{
+	public class HomeController : Controller
+	{
+		//private readonly UserRoleDbContext context;
+
+		//public HomeController(UserRoleDbContext context)
+		//{
+		//	this.context = context;
+		//}
+		public IActionResult Index()
+		{
+			return View();
+		}
+
+		public IActionResult Privacy()
+		{
+			return View();
+		}
+
+		public IActionResult Login()
+		{
+			if (HttpContext.Session.GetString("UserSession") != null)
+			{
+				return RedirectToAction("Dashboard");
+			}
+			return View();
+		}
+
+		public async Task<IActionResult> Delete(int? id)
+		{
+			if (id == null || context.UserDetails == null)
+			{
+				return NotFound();
+			}
+			var userData = await context.UserDetails.FirstOrDefaultAsync(x => x.UserId == id);
+			if (userData == null)
+			{
+				return NotFound();
+			}
+			return View(userData);
+		}
+
+		[HttpPost, ActionName("Delete")]
+		public async Task<IActionResult> DeleteConfirm(int? id)
+		{
+			var userData = await context.UserDetails.FindAsync(id);
+			if (userData != null)
+			{
+				context.UserDetails.Remove(userData);
+			}
+			await context.SaveChangesAsync();
+			return RedirectToAction("Dashboard", "Home");
+		}
+
+		[HttpPost]
+		public IActionResult Login(UserDetail user)
+		{
+			var myUser = context.UserDetails.Where(x => x.UserName == user.UserName && x.Password == user.Password).FirstOrDefault();
+			if (myUser != null)
+			{
+				HttpContext.Session.SetString("UserSession", myUser.UserName!);
+				HttpContext.Session.SetInt32("UserID", (int)myUser.RoleId!);
+				return RedirectToAction("Dashboard");
+			}
+			else
+			{
+				ViewBag.Message = "Login Failed....";
+			}
+			return View();
+		}
+
+		public async Task<IActionResult> Dashboard()
+		{
+			if (HttpContext.Session.GetString("UserSession") != null)
+			{
+				int? roleId = HttpContext.Session.GetInt32("UserID");
+
+				if (roleId == null)
+				{
+					return RedirectToAction("Login");
+				}
+
+				var allowedActions = await context.RoleDetails
+					.Where(r => r.RoleId == roleId)
+					.SelectMany(r => r.Actions)
+					.Select(a => a.ActionName)
+					.ToListAsync();
+
+				ViewBag.AllowedActions = allowedActions;
+
+				var users = await context.UserDetails.ToListAsync();
+
+				return View(users);
+			}
+			else
+			{
+				return RedirectToAction("Login");
+			}
+		}
+
+
+		public async Task<IActionResult> Edit(int? id)
+		{
+			if (id == null || context.UserDetails == null)
+			{
+				return NotFound();
+			}
+			var myUser = await context.UserDetails.FindAsync(id);
+			if (myUser == null)
+			{
+				return NotFound();
+			}
+			return View(myUser);
+		}
+
+		[HttpPost]
+		public async Task<IActionResult> Edit(int? id, UserDetail user)
+		{
+			if (id != user.UserId)
+			{
+				return NotFound();
+			}
+			if (ModelState.IsValid)
+			{
+				context.UserDetails.Update(user);
+				await context.SaveChangesAsync();
+				return RedirectToAction("Dashboard", "Home");
+			}
+			return View(user);
+		}
+
+		public async Task<IActionResult> Details(int? id)
+		{
+			if (id == null || context.UserDetails == null)
+			{
+				return NotFound();
+			}
+			var userData = await context.UserDetails.FirstOrDefaultAsync(x => x.UserId == id);
+			if (userData == null)
+			{
+				return NotFound();
+			}
+			return View(userData);
+		}
+
+		public IActionResult Create()
+		{
+			return View();
+		}
+
+		[HttpPost]
+		[ValidateAntiForgeryToken]
+		public async Task<IActionResult> Create(UserDetail user)
+		{
+			if (ModelState.IsValid)
+			{
+				await context.UserDetails.AddAsync(user);
+				await context.SaveChangesAsync();
+				return RedirectToAction("Dashboard", "Home");
+			}
+			return View(user);
+		}
+
+		//[HttpGet]
+		//public async Task<IActionResult> LoginAJAX(string UserName)
+		//{
+		//	var user = await context.UserDetails.Where(x => x.UserName == UserName).FirstOrDefaultAsync();
+		//	if (user == null)
+		//	{
+		//		return Json(new { success = false, message = "Username not found" });
+		//	}
+		//	HttpContext.Session.SetString("UserSession", user.UserName);
+
+		//	//return Json(new { success = true, user = new { user.RoleId } });
+		//}
+
+		public IActionResult Logout()
+		{
+			if (HttpContext.Session.GetString("UserSession") != null)
+			{
+				HttpContext.Session.Remove("UserSession");
+				return RedirectToAction("Login");
+			}
+			return View();
+		}
+
+		[ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+		public IActionResult Error()
+		{
+			return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+		}
+	}
+}
+
